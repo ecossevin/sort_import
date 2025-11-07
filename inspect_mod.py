@@ -6,17 +6,19 @@ import re
 This scripts looks for all SUBROUTINE defined in each MODULE. Then, 
 it adds the USE MODULE, ONLY : SUB1, SUB2...
 
-#### OLD ### calls_per_mod = {MODULE1 : { SUBROUTINE1 : [CALL1, CALL2,...]}, {SUBROUTINE2 : [CALL1, CALL2]}, MODULE2 : {SUBROUTINE1: [CALL1, CALL2,...] }}
 subroutines_per_mod = {MODULE1 : [SUBROUTINE1,...], MODULE2 : [SUBROUTINE1,...] }
 mod_per_subroutines= {SUBROUTINE1 : MODULE1, SUBROUTINE2: MODULE2 }
 
 The use_to_add contains the module to USE and the ONLY associated : 
 use_to_add = {MODULE1 : [CALL2], MODULE2 : [CALL3]}   
-use_range = {MODULE1 : [line_start_USE, line_end_USE], ...}
-map_module_name = {MODULE1 : mode_module1.F90, MODULE2 : mode_toto.F90}
 
 1) read all the mode_XX.F90 files and build subroutines_per_mod 
 2) read all the mode_XX.F90 files and add the USE
+
+
+TODO : if a USE statement imports some SUBROUTINE and other type 
+than subroutine, the code will be broken. Indeed, the subroutines will
+be added, but the other wont be recovered in the import.
 """
 
 def is_comment(line):
@@ -71,6 +73,9 @@ def update_mods(folder, subroutines_per_mod, mod_per_subroutines):
             if file.startswith(module_prefix):
                 file_path = os.path.join(root, file)
                 file_name, lines = open_module(file_path, "r")
+                print("file_name = ", file_name)
+                #if file_name == "mode_turb_ver_dyn_flux.F90":
+                #    breakpoint()
                 #module_name = get_module_name(lines)
                 look_for_subroutine_body(lines, subroutines_per_mod, mod_per_subroutines)
 
@@ -87,11 +92,13 @@ def look_for_subroutine_body(lines, subroutines_per_mod, mod_per_subroutines):
     call_pattern = rf'CALL\s*([A-Z0-9_]*)'
     idx = 0
     use_pattern = rf'USE\s*([A-Z0-9_]*)'
+    in_subroutine = False
     while idx<len(lines):
         line = lines[idx]
         if not is_comment(line):
             if "SUBROUTINE" in line:
                 if "END SUBROUTINE" not in line:
+                    in_subroutine = True
                     has_a_start_index = False 
                     use_to_add = {} #local to each subroutine
                     calls_name = []
@@ -107,16 +114,18 @@ def look_for_subroutine_body(lines, subroutines_per_mod, mod_per_subroutines):
                         if module_name not in use_to_add:
                             use_to_add[module_name] = [call_name]
                         else:
-                            use_to_add[module_name].append(call_name)
+                            if call_name not in use_to_add[module_name]:
+                                use_to_add[module_name].append(call_name)
         
         #clean the imports
         if not is_comment(line):
             if "USE" in line:
                 module_name = re.findall(use_pattern, line)[0]
                 if module_name in subroutines_per_mod:
-                    if not has_a_start_index:
-                        idx_use = idx
-                        has_a_start_index = True #we want the first idx of a cleaned USE
+                    if in_subroutine : 
+                        if not has_a_start_index:
+                            idx_use = idx
+                            has_a_start_index = True #we want the first idx of a cleaned USE
                     lines.pop(idx)
                     line = lines[idx]
                     while re.match(r'^\s*&', line): #if line starts with &, we are still in the USE
@@ -126,6 +135,7 @@ def look_for_subroutine_body(lines, subroutines_per_mod, mod_per_subroutines):
         #at the end of the routine, we insert the new use statements at idx_use
         if not is_comment(line):
             if "END SUBROUTINE" in line:
+                in_subroutine = False
                 if idx_use != -1:
                     use_lst = insert_use(idx_use, lines, use_to_add)
                     lines[idx_use:idx_use] = use_lst
@@ -161,7 +171,7 @@ def generate_use(use_name, calls, use_lst):
             use_string += less_calls_str
             use_lst.append(use_string)
         else:
-            use_lst.append(use_string)
+            use_lst.append(less_calls_str)
     use_lst[-1] = use_lst[-1][:-6] #remove the lst , & \n
     use_lst[-1] = use_lst[-1] + " \n" #remove the lst , & \n
 def get_module_name(lines):
