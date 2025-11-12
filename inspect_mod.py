@@ -74,7 +74,7 @@ def update_mods(folder, subroutines_per_mod, mod_per_subroutines):
                 file_path = os.path.join(root, file)
                 file_name, lines = open_module(file_path, "r")
                 print("file_name = ", file_name)
-#                if file_name == "mode_gradient_m_phy.F90":
+#                if file_name == "mode_gradient_u_phy.F90":
 #                    breakpoint()
                 module_name = get_module_name(lines)
                 look_for_subroutine_body(lines, subroutines_per_mod, mod_per_subroutines)
@@ -140,7 +140,7 @@ def look_for_subroutine_body(lines, subroutines_per_mod, mod_per_subroutines):
                 in_subroutine = False
                 if idx_use != -1:
                     use_lst = insert_use(idx_use, lines, use_to_add)
-                    lines[idx_use:idx_use+1] = use_lst
+                    lines[idx_use:idx_use] = use_lst
 #                    lines.insert(idx_use, use_lst)
                     idx += len(use_lst)
         idx += 1
