@@ -140,7 +140,7 @@ def look_for_subroutine_body(lines, subroutines_per_mod, mod_per_subroutines):
                 in_subroutine = False
                 if idx_use != -1:
                     use_lst = insert_use(idx_use, lines, use_to_add)
-                    lines[idx_use:idx_use] = use_lst
+                    lines[idx_use:idx_use+1] = use_lst
 #                    lines.insert(idx_use, use_lst)
                     idx += len(use_lst)
         idx += 1
@@ -173,8 +173,9 @@ def generate_use(use_name, calls, use_lst):
             use_string += less_calls_str
             use_lst.append(use_string)
         else:
+            less_calls_str = f"& {less_calls_str}"
             use_lst.append(less_calls_str)
-    use_lst[-1] = use_lst[-1][:-6] #remove the lst , & \n
+    use_lst[-1] = use_lst[-1][:-5] #remove the lst , & \n
     use_lst[-1] = use_lst[-1] + " \n" #remove the lst , & \n
 def get_module_name(lines):
     pattern_module = r'MODULE\s*([A-Z0-9_]*)'
