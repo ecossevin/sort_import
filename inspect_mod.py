@@ -95,6 +95,7 @@ def look_for_subroutine_body(lines, subroutines_per_mod, mod_per_subroutines):
     idx = 0
     use_pattern = rf'USE\s*([A-Z0-9_]*)'
     in_subroutine = False
+    calls_name = []
     while idx<len(lines):
         line = lines[idx]
         if not is_comment(line):

@@ -1,0 +1,22 @@
+TURBN%CTURBDIM == '3DIM' => FALSE
+ODIAG_IN_RUN => FALSE
+TURBN%CTOM=='TM06' => False
+KS = 0
+1.E-10_MNHREAL -> 1.E-10 ou 1.E-10_JPRB
+TURBN%LHARAT =>  F
+LES%LLES_CALL => F
+TURBN%LRMC01 => FALSE
+
+
+
+
+
+
+
+
+
+not use :
+MODE_GRADIENT_V_PHY
+mode_gradient_w_phy.F90
+
+mode_shuman_phy.F90 ::: rm subroutines with PRINT_MSG

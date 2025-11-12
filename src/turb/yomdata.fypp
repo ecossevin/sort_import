@@ -1,0 +1,435 @@
+MODULE YOMDATA
+
+USE PARKIND1
+
+IMPLICIT NONE
+
+#:set kinds = ['LM', 'RD', 'RM', 'IM']
+#:set ranks = [0, 1, 2, 3, 4, 5]
+
+INTERFACE SAVE
+#:for kind in kinds
+#:for rank in ranks
+MODULE PROCEDURE :: SAVE${kind}$${rank}$
+#:endfor
+#:endfor
+END INTERFACE
+
+INTERFACE LOAD
+#:for kind in kinds
+#:for rank in ranks
+MODULE PROCEDURE :: LOAD${kind}$${rank}$
+#:endfor
+#:endfor
+END INTERFACE
+
+INTERFACE DIFF
+#:for kind in kinds
+#:for rank in ranks
+MODULE PROCEDURE :: DIFF${kind}$${rank}$
+#:endfor
+#:endfor
+END INTERFACE
+
+INTERFACE STAT
+#:for kind in kinds
+#:for rank in ranks
+MODULE PROCEDURE :: STAT${kind}$${rank}$
+#:endfor
+#:endfor
+END INTERFACE
+
+TYPE DD12
+  INTEGER :: IPROMA1, IPROMA2
+  INTEGER :: IGPBLKS1, IGPBLKS2
+  INTEGER :: IGPTOT1, IGPTOT2
+  INTEGER, ALLOCATABLE :: JLON1 (:,:)
+  INTEGER, ALLOCATABLE :: JBLK1 (:,:)
+CONTAINS
+  PROCEDURE :: INIT => DD12_INIT
+#:for kind in kinds
+#:for rank in ranks
+
+#:if rank >= 2
+
+  GENERIC :: SHUFFLE => SHUFFLE${kind}$${rank}$
+  PROCEDURE :: SHUFFLE${kind}$${rank}$
+
+  GENERIC :: SHUFFLE => SHUFFLE_PTR_${kind}$${rank}$
+  PROCEDURE :: SHUFFLE_PTR_${kind}$${rank}$
+
+#:endif
+
+#:endfor
+#:endfor
+END TYPE
+
+CONTAINS
+
+SUBROUTINE DD12_INIT (SELF, KDIMS1, KDIMS2, KBLOCKLIST)
+
+CLASS (DD12) :: SELF
+INTEGER, INTENT (IN) :: KDIMS1 (2) 
+INTEGER, INTENT (IN) :: KDIMS2 (2) 
+INTEGER, INTENT (IN), OPTIONAL, TARGET :: KBLOCKLIST (:)
+
+INTEGER :: JBLK1, JBLK2
+INTEGER :: JLON1, JLON2
+INTEGER :: JGLO1, JGLO2
+
+SELF%IPROMA1 = KDIMS1 (1); SELF%IGPBLKS1 = KDIMS1 (2)
+SELF%IPROMA2 = KDIMS2 (1); SELF%IGPBLKS2 = KDIMS2 (2)
+
+SELF%IGPTOT1 = SELF%IPROMA1 * SELF%IGPBLKS1
+SELF%IGPTOT2 = SELF%IPROMA2 * SELF%IGPBLKS2
+
+ALLOCATE (SELF%JLON1 (SELF%IPROMA2, SELF%IGPBLKS2))
+ALLOCATE (SELF%JBLK1 (SELF%IPROMA2, SELF%IGPBLKS2))
+
+DO JBLK2 = 1, SELF%IGPBLKS2
+  DO JLON2 = 1, SELF%IPROMA2
+    JGLO2 = (JBLK2 - 1) * SELF%IPROMA2 + JLON2
+    JGLO1 = 1 + MODULO (JGLO2-1, SELF%IGPTOT1)
+    JBLK1 = (JGLO1+SELF%IPROMA1-1) / SELF%IPROMA1
+    JLON1 = 1 + MODULO (JGLO1-1, SELF%IPROMA1)
+    SELF%JLON1 (JLON2, JBLK2) = JLON1
+
+    IF (PRESENT (KBLOCKLIST)) THEN
+      JBLK1 = 1 + MODULO (JBLK1-1, SIZE (KBLOCKLIST))
+      JBLK1 = KBLOCKLIST (JBLK1)
+    ENDIF
+
+    SELF%JBLK1 (JLON2, JBLK2) = JBLK1
+  ENDDO
+ENDDO
+
+END SUBROUTINE
+
+#:for kind in kinds
+#:for rank in ranks
+
+#:if kind[0:1] == "L"
+  #:set type = "LOGICAL"
+#:elif kind[0:1] == "R"
+  #:set type = "REAL"
+#:elif kind[0:1] == "I"
+  #:set type = "INTEGER"
+#:endif
+
+#:if rank == 0
+SUBROUTINE SAVE${kind}$${rank}$ (P, KLUN)
+
+${type}$ (KIND=JP${kind}$), INTENT (IN) :: P 
+INTEGER,  INTENT (IN) :: KLUN
+
+WRITE (KLUN) P
+
+END SUBROUTINE
+#:else
+SUBROUTINE SAVE${kind}$${rank}$ (P, KLUN, KLBOUND)
+
+${type}$ (KIND=JP${kind}$), INTENT (IN) :: P (${','.join ([':'] * rank)}$)
+INTEGER,  INTENT (IN) :: KLUN
+INTEGER,  INTENT (IN), OPTIONAL :: KLBOUND (${rank}$)
+
+#:if kind == "RM"
+${type}$ (KIND=JPRD), ALLOCATABLE :: Z (${','.join ([':'] * rank)}$)
+#:endif
+
+INTEGER :: ILBOUND (${rank}$)
+INTEGER :: IUBOUND (${rank}$)
+
+IF (PRESENT (KLBOUND)) THEN
+  ILBOUND = KLBOUND
+ELSE
+  ILBOUND = 1
+ENDIF
+
+IUBOUND = ILBOUND + UBOUND (P) - 1
+
+WRITE (KLUN) ILBOUND
+WRITE (KLUN) IUBOUND
+
+#:set shape = ','.join (list (map (lambda i: "ILBOUND (" + str (i) + "):IUBOUND (" + str (i) + ")", range (1, rank+1))))
+
+#:if kind == "RM"
+ALLOCATE (Z (${shape}$))
+Z = P
+WRITE (KLUN) Z
+DEALLOCATE (Z)
+#:else
+WRITE (KLUN) P
+#:endif
+
+END SUBROUTINE
+#:endif
+
+#:if rank == 0
+SUBROUTINE LOAD${kind}$${rank}$ (KLUN, P)
+INTEGER, INTENT (IN) :: KLUN
+${type}$ (KIND=JP${kind}$) :: P 
+
+READ (KLUN) P
+
+END SUBROUTINE
+#:else
+SUBROUTINE LOAD${kind}$${rank}$ (KLUN, P, KLBOUND, YDD)
+
+INTEGER, INTENT (IN) :: KLUN
+${type}$ (KIND=JP${kind}$), POINTER :: P (${','.join ([':'] * rank)}$)
+INTEGER, INTENT (IN), OPTIONAL :: KLBOUND (:)
+TYPE (DD12), INTENT (IN), OPTIONAL :: YDD
+
+#:if kind == "RM"
+${type}$ (KIND=JPRD), ALLOCATABLE :: Z (${','.join ([':'] * rank)}$)
+#:endif
+
+INTEGER :: ILBOUND (${rank}$)
+INTEGER :: IUBOUND (${rank}$)
+
+READ (KLUN) ILBOUND
+READ (KLUN) IUBOUND
+
+IF (PRESENT (KLBOUND)) THEN
+  IUBOUND = IUBOUND - ILBOUND + KLBOUND
+  ILBOUND = KLBOUND
+ENDIF
+
+#:set shape = ','.join (list (map (lambda i: "ILBOUND (" + str (i) + "):IUBOUND (" + str (i) + ")", range (1, rank+1))))
+
+ALLOCATE (P (${shape}$))
+
+#:if kind == "RM"
+ALLOCATE (Z (${shape}$))
+READ (KLUN) Z
+P = Z
+DEALLOCATE (Z)
+#:else
+READ (KLUN) P
+#:endif
+
+#:if rank >= 2
+IF (PRESENT (YDD)) THEN
+  CALL YDD%SHUFFLE (P)
+ENDIF
+#:endif
+
+END SUBROUTINE
+#:endif
+
+#:if rank >= 2
+
+SUBROUTINE SHUFFLE${kind}$${rank}$ (SELF, P1, P2)
+
+CLASS (DD12),               INTENT (IN)  :: SELF
+${type}$ (KIND=JP${kind}$), INTENT (IN)  :: P1 (${','.join ([':'] * rank)}$)
+${type}$ (KIND=JP${kind}$), INTENT (OUT) :: P2 (${','.join ([':'] * rank)}$)
+
+INTEGER :: JBLK2, JLON2
+
+#:set dd = ','.join ([''] + ([':'] * (rank - 2)) + [''])
+
+DO JBLK2 = 1, SELF%IGPBLKS2
+  DO JLON2 = 1, SELF%IPROMA2
+    P2 (JLON2 ${dd}$ JBLK2) = P1 (SELF%JLON1 (JLON2, JBLK2) ${dd}$ SELF%JBLK1 (JLON2, JBLK2))
+  ENDDO
+ENDDO
+
+END SUBROUTINE
+
+SUBROUTINE SHUFFLE_PTR_${kind}$${rank}$ (SELF, P)
+
+CLASS (DD12),               INTENT (IN)  :: SELF
+${type}$ (KIND=JP${kind}$), POINTER  :: P (${','.join ([':'] * rank)}$)
+
+${type}$ (KIND=JP${kind}$), ALLOCATABLE :: Z (${','.join ([':'] * rank)}$)
+
+#:set shape = ','.join (list (map (lambda i: "LBOUND (P," + str (i) + "):UBOUND (P," + str (i) + ")", range (1, rank+1))))
+ALLOCATE (Z (${shape}$))
+
+Z = P
+
+DEALLOCATE (P)
+
+#:set shape = ','.join ([''] + list (map (lambda i: "LBOUND (Z," + str (i) + "):UBOUND (Z," + str (i) + ")", range (2, rank))))
+ALLOCATE (P (SELF%IPROMA2 ${shape}$, SELF%IGPBLKS2))
+
+CALL SELF%SHUFFLE (Z, P)
+
+END SUBROUTINE
+
+#:endif
+
+#:if rank == 0
+
+SUBROUTINE DIFF${kind}$${rank}$ (CDNAME, P1, P2)
+
+CHARACTER (LEN=*) :: CDNAME
+${type}$ (KIND=JP${kind}$), INTENT (IN) :: P1 
+${type}$ (KIND=JP${kind}$), INTENT (IN) :: P2 
+
+IF (P1 /= P2) THEN
+  PRINT *, CDNAME
+  WRITE (*, '(3E30.20)') P1, P2, P1 - P2
+ENDIF
+
+END SUBROUTINE
+#:else
+SUBROUTINE DIFF${kind}$${rank}$ (CDNAME, P1, P2, KLUN, YDD)
+
+CHARACTER (LEN=*) :: CDNAME
+${type}$ (KIND=JP${kind}$), INTENT (IN) :: P1 (${','.join ([':'] * rank)}$)
+${type}$ (KIND=JP${kind}$), INTENT (IN), OPTIONAL, TARGET :: P2 (${','.join ([':'] * rank)}$)
+INTEGER, INTENT (IN), OPTIONAL :: KLUN
+TYPE (DD12), INTENT (IN), OPTIONAL :: YDD
+
+${type}$ (KIND=JP${kind}$), POINTER :: Z2 (${','.join ([':'] * rank)}$)
+
+INTEGER :: I
+
+#:set ind = ','.join (list (map (lambda i: "I" + str (i), range (1, rank+1))))
+
+INTEGER :: ${ind}$
+LOGICAL :: LLP
+
+IF (PRESENT (P2)) THEN
+  Z2 => P2
+ELSE
+  CALL LOAD (KLUN, Z2, KLBOUND=LBOUND (P1)) ! LBOUND (P1) = [1, 1, ...]
+#:if rank >= 2
+  IF (PRESENT (YDD)) THEN
+    CALL YDD%SHUFFLE (Z2)
+  ENDIF
+#:endif
+ENDIF
+
+#:for i in range (1, rank+1)
+IF (SIZE (P1, ${i}$) /= SIZE (Z2, ${i}$)) STOP 1
+#:endfor
+
+LLP = .TRUE.
+
+#:for i in range (rank)
+DO I${rank-i}$ = 1, SIZE (P1, ${rank-i}$)
+#:endfor
+  IF (P1 (${ind}$) /= Z2 (${ind}$)) THEN
+    IF (LLP) PRINT *, CDNAME; LLP = .FALSE.
+#:if kind == "IM"
+    WRITE (*, '(3I6," ",${rank}$I6)') P1 (${ind}$), Z2 (${ind}$), P1 (${ind}$) - Z2 (${ind}$), ${ind}$
+#:else
+    WRITE (*, '(3E30.20," ",${rank}$I6)') P1 (${ind}$), Z2 (${ind}$), P1 (${ind}$) - Z2 (${ind}$), ${ind}$
+#:endif
+  ENDIF
+
+#:for i in range (rank)
+ENDDO
+#:endfor
+
+IF (.NOT. PRESENT (P2)) THEN
+  DEALLOCATE (Z2)
+ENDIF
+
+END SUBROUTINE
+#:endif
+
+
+#:if rank == 0
+
+SUBROUTINE STAT${kind}$${rank}$ (CDNAME, P1, P2)
+
+CHARACTER (LEN=*) :: CDNAME
+${type}$ (KIND=JP${kind}$), INTENT (IN) :: P1 
+${type}$ (KIND=JP${kind}$), INTENT (IN) :: P2 
+
+END SUBROUTINE
+#:else
+SUBROUTINE STAT${kind}$${rank}$ (CDNAME, P1, P2, KLUN, YDD)
+
+CHARACTER (LEN=*) :: CDNAME
+${type}$ (KIND=JP${kind}$), INTENT (IN) :: P1 (${','.join ([':'] * rank)}$)
+${type}$ (KIND=JP${kind}$), INTENT (IN), OPTIONAL, TARGET :: P2 (${','.join ([':'] * rank)}$)
+INTEGER, INTENT (IN), OPTIONAL :: KLUN
+TYPE (DD12), INTENT (IN), OPTIONAL :: YDD
+
+REAL (KIND=JPRD) :: ZMAXDIFF, ZAVGDIFF, ZZDIFF, ZMAX, ZAVG, ZZ
+
+${type}$ (KIND=JP${kind}$), POINTER :: Z2 (${','.join ([':'] * rank)}$)
+
+INTEGER :: I
+
+#:set ind = ','.join (list (map (lambda i: "I" + str (i), range (1, rank+1))))
+
+INTEGER :: ${ind}$
+LOGICAL :: LLP
+
+IF (PRESENT (P2)) THEN
+  Z2 => P2
+ELSE
+  CALL LOAD (KLUN, Z2, KLBOUND=LBOUND (P1)) ! LBOUND (P1) = [1, 1, ...]
+#:if rank >= 2
+  IF (PRESENT (YDD)) THEN
+    CALL YDD%SHUFFLE (Z2)
+  ENDIF
+#:endif
+ENDIF
+
+#:for i in range (1, rank+1)
+IF (SIZE (P1, ${i}$) /= SIZE (Z2, ${i}$)) STOP 1
+#:endfor
+
+ZMAXDIFF = 0
+ZAVGDIFF = 0
+ZAVG = 0
+ZMAX = 0
+
+LLP = .TRUE.
+
+#:for i in range (rank)
+DO I${rank-i}$ = 1, SIZE (P1, ${rank-i}$)
+#:endfor
+
+#:if kind == 'JPLM'
+  IF (P1 (${ind}$) == Z2 (${ind}$)) THEN
+    ZZDIFF = 0
+  ELSE
+    ZZDIFF = 1
+  ENDIF
+  IF (P1 (${ind}$)) THEN
+    ZZ = 1
+  ELSE
+    ZZ = 0
+  ENDIF
+#:else
+  ZZDIFF = ABS (P1 (${ind}$) - Z2 (${ind}$))
+  ZZ = ABS (P1 (${ind}$))
+#:endif
+
+  ZMAXDIFF = MAX (ZMAXDIFF, ABS (ZZDIFF))
+  ZAVGDIFF = ZAVGDIFF + ABS (ZZDIFF)
+
+  ZMAX = MAX (ZMAX, ZZ)
+  ZAVG = ZAVG + ZZ
+ 
+#:for i in range (rank)
+ENDDO
+#:endfor
+
+IF (SIZE (P1) > 0) THEN
+ZAVGDIFF = ZAVGDIFF / REAL (SIZE (P1), JPRD)
+ZAVG = ZAVG / REAL (SIZE (P1), JPRD)
+ENDIF
+
+WRITE (*, '(A32," ",E30.20," ",E30.20," ",E30.20," ",E30.20)') CDNAME, ZAVG, ZMAX, ZAVGDIFF, ZMAXDIFF
+
+IF (.NOT. PRESENT (P2)) THEN
+  DEALLOCATE (Z2)
+ENDIF
+
+END SUBROUTINE
+#:endif
+
+#:endfor
+#:endfor
+
+END MODULE
+
