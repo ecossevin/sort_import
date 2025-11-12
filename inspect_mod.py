@@ -74,10 +74,12 @@ def update_mods(folder, subroutines_per_mod, mod_per_subroutines):
                 file_path = os.path.join(root, file)
                 file_name, lines = open_module(file_path, "r")
                 print("file_name = ", file_name)
-                #if file_name == "mode_turb_ver_dyn_flux.F90":
-                #    breakpoint()
-                #module_name = get_module_name(lines)
+#                if file_name == "mode_gradient_m_phy.F90":
+#                    breakpoint()
+                module_name = get_module_name(lines)
                 look_for_subroutine_body(lines, subroutines_per_mod, mod_per_subroutines)
+                save_module(lines, file_path)
+
 
 def look_for_subroutine_body(lines, subroutines_per_mod, mod_per_subroutines):
     """
@@ -145,8 +147,8 @@ def look_for_subroutine_body(lines, subroutines_per_mod, mod_per_subroutines):
     print("***********************")
     print("       NEW  FILE       ")
     print("***********************")
-    for line in lines:
-        print(line.strip())
+    #for line in lines:
+    #    print(line.strip())
 
 def insert_use(idx_use, lines, use_to_add):
     use_lst = []
@@ -189,6 +191,11 @@ def open_module(file_path, file_action):
     with open(file_path, file_action, encoding='utf-8') as file:
         file_content = file.readlines()
     return(file_name, file_content)
+
+def save_module(lines, file_path):
+    with open(file_path, "w") as module_file:
+        for line in lines:
+            module_file.write(line)
 
 #def get_subroutines(file):
 
