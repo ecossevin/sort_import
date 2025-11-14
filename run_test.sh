@@ -1,3 +1,4 @@
+rm -rf src/turb_test
 cp -r src/turb src/turb_test
 python3 inspect_mod.py ./src/turb_test
 
@@ -72,7 +73,7 @@ mode_update_iiju_phy.F90
 do
 echo "==>" $f "<=="
 file=./src/turb/$f #files before transformation
-new_file=./src/turb_new/$f #file to which compare
+test_ref_file=./src/turb_test_ref/$f #file to which compare
 test_file=./src/turb_test/$f #file created when running the test
-diff $new_file $test_file
+diff $test_ref_file $test_file
 done

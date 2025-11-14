@@ -1,0 +1,103 @@
+!MNH_LIC Copyright 1994-2014 CNRS, Meteo-France and Universite Paul Sabatier
+!MNH_LIC This is part of the Meso-NH software governed by the CeCILL-C licence
+!MNH_LIC version 1. See LICENSE, CeCILL-C_V1-en.txt and CeCILL-C_V1-fr.txt  
+!MNH_LIC for details. version 1.
+!     ######spl
+      MODULE MODD_NEB_n
+!     #############################
+!> @file
+!!****  *MODD_NEB_n* - Declaration of nebulosity constants
+!!
+!!    PURPOSE
+!!    -------
+!!      The purpose of this declarative module is to declare some
+!!      constants for nebulosity calculation
+!
+!!
+!!    IMPLICIT ARGUMENTS
+!!    ------------------
+!!      None
+!!
+!!    REFERENCE
+!!    ---------
+!!
+!!
+!!    AUTHOR
+!!    ------
+!!       S. Riette (Meteo France)
+!!
+!!    MODIFICATIONS
+!!    -------------
+!!      Original    24 Aug 2011
+!-------------------------------------------------------------------------------
+!
+!*       0.   DECLARATIONS
+!             ------------
+!
+USE MODD_PARAMETERS, ONLY: JPMODELMAX
+IMPLICIT NONE
+!
+TYPE NEB_t
+  REAL          :: XTMINMIX   !< minimum temperature of mixed phase
+  REAL          :: XTMAXMIX   !< maximum temperature of mixed phase
+  LOGICAL       :: LHGT_QS    !< Switch for height dependent VQSIGSAT
+  CHARACTER(LEN=1) :: CFRAC_ICE_ADJUST     !< ice fraction for adjustments
+  CHARACTER(LEN=1) :: CFRAC_ICE_SHALLOW_MF !< ice fraction for shallow_mf
+  REAL               :: VSIGQSAT      !< coeff applied to qsat variance contribution
+  CHARACTER(LEN=80)  :: CCONDENS      !< subrgrid condensation PDF
+  CHARACTER(LEN=4)   :: CLAMBDA3      !< lambda3 choice for subgrid cloud scheme
+  LOGICAL            :: LSTATNW       !< updated full statistical cloud scheme
+  LOGICAL            :: LSIGMAS       !< Switch for using Sigma_s from turbulence scheme
+  LOGICAL            :: LSUBG_COND    !< Switch for subgrid condensation 
+  LOGICAL            :: LCONDBORN     !< Switch to limit condensation 
+END TYPE NEB_t
+
+TYPE(NEB_t), DIMENSION(JPMODELMAX), SAVE, TARGET :: NEB_MODEL
+TYPE(NEB_t), POINTER, SAVE :: NEBN => NULL()
+
+REAL, POINTER :: XTMINMIX=>NULL(), &
+                 XTMAXMIX=>NULL()
+LOGICAL, POINTER :: LHGT_QS=>NULL()
+CHARACTER(LEN=1), POINTER :: CFRAC_ICE_ADJUST => NULL()
+CHARACTER(LEN=1), POINTER :: CFRAC_ICE_SHALLOW_MF => NULL()
+REAL, POINTER :: VSIGQSAT=>NULL()
+CHARACTER(LEN=80),POINTER :: CCONDENS=>NULL()
+CHARACTER(LEN=4),POINTER :: CLAMBDA3=>NULL()
+LOGICAL, POINTER :: LSTATNW=>NULL()
+LOGICAL, POINTER :: LSIGMAS=>NULL()
+LOGICAL, POINTER :: LSUBG_COND=>NULL()
+LOGICAL, POINTER :: LCONDBORN=>NULL()
+!
+NAMELIST/NAM_NEBn/XTMINMIX, XTMAXMIX, LHGT_QS, CFRAC_ICE_ADJUST, CFRAC_ICE_SHALLOW_MF, &
+                 &VSIGQSAT, CCONDENS, CLAMBDA3, LSTATNW, LSIGMAS, LSUBG_COND, LCONDBORN
+!
+!-------------------------------------------------------------------------------
+!
+CONTAINS
+SUBROUTINE NEB_GOTO_MODEL(KFROM, KTO)
+!! This subroutine associate all the pointers to the right component of
+!! the right strucuture. A value can be accessed through the structure NEBN
+!! or through the strucuture NEB_MODEL(KTO) or directly through these pointers.
+IMPLICIT NONE
+INTEGER, INTENT(IN) :: KFROM, KTO
+!
+IF(.NOT. ASSOCIATED(NEBN, NEB_MODEL(KTO))) THEN
+  !
+  NEBN => NEB_MODEL(KTO)
+  !
+  XTMINMIX => NEBN%XTMINMIX
+  XTMAXMIX => NEBN%XTMAXMIX
+  LHGT_QS => NEBN%LHGT_QS
+  CFRAC_ICE_ADJUST => NEBN%CFRAC_ICE_ADJUST
+  CFRAC_ICE_SHALLOW_MF => NEBN%CFRAC_ICE_SHALLOW_MF
+  VSIGQSAT => NEBN%VSIGQSAT
+  CCONDENS => NEBN%CCONDENS
+  CLAMBDA3 => NEBN%CLAMBDA3
+  LSTATNW => NEBN%LSTATNW
+  LSIGMAS => NEBN%LSIGMAS
+  LSUBG_COND => NEBN%LSUBG_COND
+  LCONDBORN => NEBN%LCONDBORN
+  !
+ENDIF
+END SUBROUTINE NEB_GOTO_MODEL
+END MODULE MODD_NEB_n

@@ -1,0 +1,11 @@
+[
+  '--stack84',
+  '--methods-list', 'save,load,copy,wipe',
+  '--type-bound-methods',
+  '--merge-interfaces',
+  '--parallelmethod-section',
+  '--numbered-submodules',
+  '--use-bit-repro-intrinsics',
+  '--use-bit-repro-parens',
+  '--tmp', '1' # '/home/gmap/mrpm/marguina/shallow_mf/compile.cpu_intel_d/tmp',
+]
