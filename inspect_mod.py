@@ -30,7 +30,7 @@ def inspect(content_name, content, node_type, node_map):
 # content is either a whole MODULE i) if we are looking for SUBROUTINE
 #                           SUBROUTINE ii) if we are looking for CALL
 # node_type is either CALL or SUBROUTINE 
-    node_pattern = rf'{node_type}\s*([A-Z0-9_]*)'
+    node_pattern = rf'{node_type}\s*([A-Za-z0-9_]*)'
     ignore_call = ["DR_HOOK"] #ignore CALL and SUBROUTINE
     for line in content:
         if not is_comment(line):  #ignore commented lines
@@ -48,7 +48,7 @@ def find_mods(folder):
     node_map = {}
     node_map_2 = {}
     map_module_name = {}
-    module_prefix = "mode_"
+    module_prefix = ("mode_")
     for root, folders, files in os.walk(folder):
         for file in files:
             if file.startswith(module_prefix):
@@ -74,7 +74,7 @@ def update_mods(folder, subroutines_per_mod, mod_per_subroutines):
                 file_path = os.path.join(root, file)
                 file_name, lines = open_module(file_path, "r")
                 print("file_name = ", file_name)
-#                if file_name == "mode_gradient_u_phy.F90":
+#                if file_name == "mode_turb_hor_dyn_corr.F90":
 #                    breakpoint()
                 module_name = get_module_name(lines)
                 look_for_subroutine_body(lines, subroutines_per_mod, mod_per_subroutines)
@@ -91,9 +91,9 @@ def look_for_subroutine_body(lines, subroutines_per_mod, mod_per_subroutines):
     use_to_add = {MODULE1 : [CALL2], MODULE2 : [CALL3]}   
     """
     ignore_call = ["DR_HOOK"]
-    call_pattern = rf'CALL\s*([A-Z0-9_]*)'
+    call_pattern = rf'CALL\s*([A-Za-z0-9_]*)'
     idx = 0
-    use_pattern = rf'USE\s*([A-Z0-9_]*)'
+    use_pattern = rf'USE\s*([A-Za-z0-9_]*)'
     in_subroutine = False
     calls_name = []
     while idx<len(lines):
@@ -179,7 +179,7 @@ def generate_use(use_name, calls, use_lst):
     use_lst[-1] = use_lst[-1][:-5] #remove the lst , & \n
     use_lst[-1] = use_lst[-1] + " \n" #remove the lst , & \n
 def get_module_name(lines):
-    pattern_module = r'MODULE\s*([A-Z0-9_]*)'
+    pattern_module = r'MODULE\s*([A-Za-z0-9_]*)'
     for line in lines:
         if "MODULE" in line:
             if not is_comment(line):
