@@ -21,34 +21,49 @@ than subroutine, the code will be broken. Indeed, the subroutines will
 be added, but the other wont be recovered in the import.
 """
 
+#==========================
+#   Helper functions  
+#==========================
 def is_comment(line):
     #ignore commented lines
     return re.match(r'^\s*\!', line)
 
-def inspect(content_name, content, node_type, node_map):
-# Reads mod file and creates a dict { name : {node_type}1_name, {node_type}2_name ... }
-# content is either a whole MODULE i) if we are looking for SUBROUTINE
-#                           SUBROUTINE ii) if we are looking for CALL
-# node_type is either CALL or SUBROUTINE 
-    node_pattern = rf'{node_type}\s*([A-Za-z0-9_]*)'
-    ignore_call = ["DR_HOOK"] #ignore CALL and SUBROUTINE
-    for line in content:
-        if not is_comment(line):  #ignore commented lines
-            if node_type in line: 
-                node_name = re.findall(node_pattern, line)[0]
-                if node_name not in ignore_call:
-                    if node_name not in node_map[content_name]:
-                        node_map[content_name].append(node_name)
-    return node_map  
+def open_module(file_path, file_action):
 
-def find_mods(folder):
+    file_name = os.path.basename(file_path)
+
+    with open(file_path, file_action, encoding='utf-8') as file:
+        file_content = file.readlines()
+    return(file_name, file_content)
+
+def save_module(lines, file_path):
+    with open(file_path, "w") as module_file:
+        for line in lines:
+            module_file.write(line)
+#==========================
+#    1)
+#==========================
+def find_subroutine_declarations(module_name, file_content, sub_map):
+# Reads the file and creates a dict { name : subroutine1_name, subroutine2_name ... }
+    sub_pattern = rf'SUBROUTINE\s*([A-Za-z0-9_]*)'
+    ignore_sub = ["DR_HOOK"] #ignore CALL and SUBROUTINE
+    for line in file_content:
+        if not is_comment(line):  #ignore commented lines
+            if 'SUBROUTINE' in line: 
+                sub_name = re.findall(sub_pattern, line)[0]
+                if sub_name not in ignore_sub:
+                    if sub_name not in sub_map[module_name]:
+                        sub_map[module_name].append(sub_name)
+    return sub_map  
+
+def find_subroutine_in_module(folder):
 # Inspect recursively the folder, find all the files name starting with module_prefix, then find all the SUBROUTINE defined in that module
 
     node_type = "SUBROUTINE"
-    node_map = {}
-    node_map_2 = {}
+    sub_per_mod = {}
+    mod_per_sub= {}
     map_module_name = {}
-    module_prefix = ("mode_")
+    module_prefix = "mode_"
     for root, folders, files in os.walk(folder):
         for file in files:
             if file.startswith(module_prefix):
@@ -56,14 +71,17 @@ def find_mods(folder):
                 file_name, lines = open_module(file_path, "r")
                 module_name = get_module_name(lines)
                 map_module_name[module_name] = file_name #MODULE1 : mode_module1.F90
-                node_map[module_name] = []
-                inspect(module_name, lines, node_type, node_map)
-                for subroutine in node_map[module_name]:
-                    node_map_2[subroutine] = module_name
-    return node_map, node_map_2, map_module_name
+                sub_per_mod[module_name] = []
+                find_subroutine_declarations(module_name, lines, sub_per_mod)
+                for subroutine in sub_per_mod[module_name]:
+                    mod_per_sub[subroutine] = module_name
+    return sub_per_mod, mod_per_sub, map_module_name
 #                print(file_path)
 
-def update_mods(folder, subroutines_per_mod, mod_per_subroutines):
+#==========================
+#    2)
+#==========================
+def update_use_statements(folder, subroutines_per_mod, mod_per_subroutines):
 # Inspect recursively the folder, find all the files name starting with module_prefix, then add the USE statement to each SUBROUTINE of the file
 
     map_module_name = {}
@@ -74,14 +92,14 @@ def update_mods(folder, subroutines_per_mod, mod_per_subroutines):
                 file_path = os.path.join(root, file)
                 file_name, lines = open_module(file_path, "r")
                 print("file_name = ", file_name)
-#                if file_name == "mode_turb_hor_dyn_corr.F90":
+#                if file_name == "mode_turb_ver_thermo_corr.F90":
 #                    breakpoint()
                 module_name = get_module_name(lines)
-                look_for_subroutine_body(lines, subroutines_per_mod, mod_per_subroutines)
+                process_module(lines, subroutines_per_mod, mod_per_subroutines)
                 save_module(lines, file_path)
 
 
-def look_for_subroutine_body(lines, subroutines_per_mod, mod_per_subroutines):
+def process_module(lines, subroutines_per_mod, mod_per_subroutines):
     """
     i)     looks for SUBROUTINE begining idx
     ii)    looks for first USE idx 1) one line, 2) several lines
@@ -186,41 +204,15 @@ def get_module_name(lines):
                 module_name = re.findall(pattern_module, line)[0]
                 return module_name
 
-def open_module(file_path, file_action):
-
-    file_name = os.path.basename(file_path)
-
-    with open(file_path, file_action, encoding='utf-8') as file:
-        file_content = file.readlines()
-    return(file_name, file_content)
-
-def save_module(lines, file_path):
-    with open(file_path, "w") as module_file:
-        for line in lines:
-            module_file.write(line)
-
-#def get_subroutines(file):
-
-
-
-
-#def remove_use(use_range):
-
-#file_name = sys.argv[1]
-#inspect_mod(file_name)
-
 #==========================
 #    1)
 #==========================
 folder_name = sys.argv[1]
-subroutines_per_mod, mod_per_subroutines, map_module_name = find_mods(folder_name)
+subroutines_per_mod, mod_per_subroutines, map_module_name = find_subroutine_in_module(folder_name)
 #print(subroutines_per_mod)
-#{'MODE_TEST': ['SUB1', '', 'SUB2'], 'MODULE1': ['MODULE1_SUB1', 'MODULE1_SUB2', 'MODULE1_SUB3', 'MODULE1_SUB4'], 'MODULE2': ['MODULE2_SUB1', 'MODULE2_SUB2', 'MODULE2_SUB3', 'MODULE2_SUB4']}
-
 
 #==========================
 #    2)
 #==========================
-update_mods(folder_name, subroutines_per_mod, mod_per_subroutines)
+update_use_statements(folder_name, subroutines_per_mod, mod_per_subroutines)
 
-#find_mods(folder_name, "CALL")
